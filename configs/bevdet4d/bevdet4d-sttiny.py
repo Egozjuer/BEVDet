@@ -47,7 +47,7 @@ model = dict(
     before=True,
     img_backbone=dict(
         type='SwinTransformer',
-        pretrained="/mnt/cfs/algorithm/junjie.huang/models/swin_tiny_patch4_window7_224.pth",
+        pretrained="./weights/swin_tiny_patch4_window7_224.pth",
         pretrain_img_size=224,
         embed_dims=96,
         patch_size=4,
@@ -235,7 +235,7 @@ input_modality = dict(
     use_external=False)
 
 data = dict(
-    samples_per_gpu=8,
+    samples_per_gpu=24,
     workers_per_gpu=4,
     train=dict(
         type='CBGSDataset',
@@ -258,7 +258,7 @@ data = dict(
             prev_only=True,
             fix_direction=True)),
     val=dict(pipeline=test_pipeline, classes=class_names,
-            ann_file=data_root + 'nuscenes_infos_val_4d_interval3.pkl',
+            ann_file=data_root + 'nuscenes_infos_val_4d_interval3_max60.pkl',
         modality=input_modality, img_info_prototype='bevdet_sequential',),
     test=dict(pipeline=test_pipeline, classes=class_names,
             ann_file=data_root + 'nuscenes_infos_val_4d_interval3_max60.pkl',
@@ -276,4 +276,4 @@ lr_config = dict(
 )
 
 optimizer = dict(type='AdamW', lr=2e-4, weight_decay=0.01)
-evaluation = dict(interval=20, pipeline=eval_pipeline)
+evaluation = dict(interval=1, pipeline=eval_pipeline)

@@ -21,23 +21,23 @@ class BEVDet(CenterPoint):
     def image_encoder(self,img):
         imgs = img
         B, N, C, imH, imW = imgs.shape
-        imgs = imgs.view(B * N, C, imH, imW)
-        x = self.img_backbone(imgs)
+        imgs = imgs.view(B * N, C, imH, imW)#results [6,3,256,704]
+        x = self.img_backbone(imgs)#x is list  2 elements  ,torch.Size([6, 384, 16, 44],[6, 768, 8, 22]
         if self.with_img_neck:
-            x = self.img_neck(x)
+            x = self.img_neck(x) # x torch.Size([6, 512, 16, 44])
         _, output_dim, ouput_H, output_W = x.shape
         x = x.view(B, N, output_dim, ouput_H, output_W)
-        return x
+        return x#[1,6,512,16,44]
 
     def bev_encoder(self, x):
         x = self.img_bev_encoder_backbone(x)
         x = self.img_bev_encoder_neck(x)
-        return x
+        return x #torch.Size([1, 256, 128, 128])
 
-    def extract_img_feat(self, img, img_metas):
+    def extract_img_feat(self, img, img_metas):#这一步做完了论文中的三个部分
         """Extract features of images."""
-        x = self.image_encoder(img[0])
-        x = self.img_view_transformer([x] + img[1:])
+        x = self.image_encoder(img[0])# result x torch.Size([1, 6, 512, 16, 44]) ;img[0]:torch.Size([1, 6, 3, 256, 704])
+        x = self.img_view_transformer([x] + img[1:])#[1,64,128,128]
         x = self.bev_encoder(x)
         return [x]
 
@@ -136,9 +136,9 @@ class BEVDet(CenterPoint):
 
     def simple_test(self, points, img_metas, img=None, rescale=False):
         """Test function without augmentaiton."""
-        img_feats, _ = self.extract_feat(points, img=img, img_metas=img_metas)
-        bbox_list = [dict() for _ in range(len(img_metas))]
-        bbox_pts = self.simple_test_pts(img_feats, img_metas, rescale=rescale)
+        img_feats, _ = self.extract_feat(points, img=img, img_metas=img_metas)#做完了论文中的前三个模块
+        bbox_list = [dict() for _ in range(len(img_metas))]#len(bbox_list) 1
+        bbox_pts = self.simple_test_pts(img_feats, img_metas, rescale=rescale)#进入centerpoint
         for result_dict, pts_bbox in zip(bbox_list, bbox_pts):
             result_dict['pts_bbox'] = pts_bbox
         return bbox_list

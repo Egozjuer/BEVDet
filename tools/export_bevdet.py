@@ -21,11 +21,14 @@ from mmdet.datasets import replace_ImageToTensor
 import sys
 sys.path.append("./")
 
+# #            "args":["--config", "configs/bevdet/bevdet-sttiny.py",
+#                 "--checkpoint","weights/bevdet-sttiny-pure.pth",
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description='MMDet test (and eval) a model')
-    parser.add_argument('--config', help='test config file path')
-    parser.add_argument('--checkpoint', help='checkpoint file')
+    parser.add_argument('--config', help='test config file path',default ="/home/zjlab/fq/perception/od/BEVDet/configs/bevdet/bevdet-sttiny.py")
+    parser.add_argument('--checkpoint', help='checkpoint file',default = '/home/zjlab/fq/perception/od/BEVDet/weights/bevdet-sttiny-pure.pth')
     parser.add_argument('--out', help='output result file in pickle format')
     parser.add_argument(
         '--fuse-conv-bn',
@@ -106,17 +109,17 @@ def parse_args():
 def main():
     args = parse_args()
 
-    assert args.out or args.eval or args.format_only or args.show \
-        or args.show_dir, \
-        ('Please specify at least one operation (save/eval/format/show the '
-         'results / save the results) with the argument "--out", "--eval"'
-         ', "--format-only", "--show" or "--show-dir"')
+    # assert args.out or args.eval or args.format_only or args.show \
+    #     or args.show_dir, \
+    #     ('Please specify at least one operation (save/eval/format/show the '
+    #      'results / save the results) with the argument "--out", "--eval"'
+    #      ', "--format-only", "--show" or "--show-dir"')
 
-    if args.eval and args.format_only:
-        raise ValueError('--eval and --format_only cannot be both specified')
+    # if args.eval and args.format_only:
+    #     raise ValueError('--eval and --format_only cannot be both specified')
 
-    if args.out is not None and not args.out.endswith(('.pkl', '.pickle')):
-        raise ValueError('The output file must be a pkl file.')
+    # if args.out is not None and not args.out.endswith(('.pkl', '.pickle')):
+    #     raise ValueError('The output file must be a pkl file.')
 
     cfg = Config.fromfile(args.config)
     if args.cfg_options is not None:
@@ -171,10 +174,16 @@ def main():
     # build the model and load checkpoint
     cfg.model.train_cfg = None
     model = build_model(cfg.model, test_cfg=cfg.get('test_cfg'))
+
+
     fp16_cfg = cfg.get('fp16', None)
     if fp16_cfg is not None:
         wrap_fp16_model(model)
-    checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
+    device='cuda:0'
+
+    # checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
+    checkpoint = load_checkpoint(model, args.checkpoint, map_location=device)
+
     if args.fuse_conv_bn:
         model = fuse_conv_bn(model)
     # old versions did not save class info in checkpoints, this walkaround is
@@ -189,6 +198,65 @@ def main():
     elif hasattr(dataset, 'PALETTE'):
         # segmentation dataset has `PALETTE` attribute
         model.PALETTE = dataset.PALETTE
+    # export onnx
+    # x = torch.zeros(6,3,256,704,device = 'cuda:0')
+    class Model(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.model=model.to(device)
+            self.x1 = torch.randn(1,6,3,3,device=device)
+            self.x2 =  torch.randn(1,6,3,device=device)
+            self.x3 = torch.randn(1,6,3,3,device=device)
+            self.x4 = torch.randn(1,6,3,3,device=device)
+            self.x5 = torch.randn(1,6,3,device=device)            
+
+        def forward(self,x):
+            ib, ic, ih, iw = map(int, x.shape)
+            x = self.model.img_backbone(x)
+            x = self.model.img_neck(x)
+            x = x.view(1, 6, 512, 16, 44)
+            x6=[self.x1,self.x2,self.x3,self.x4,self.x5] 
+            x = self.model.img_view_transformer([x]+x6)
+            x = self.model.img_bev_encoder_backbone(x)
+            x = self.model.img_bev_encoder_neck(x)#result x torch.Size([1, 256, 128, 128])
+            x = self.model.pts_bbox_head([x])
+
+            return x[0]
+
+    m=Model().eval()
+    image=torch.randn(6,3,256,704,device = device)
+    torch_out=torch.onnx.export(
+        m, image, "./BEVdet.onnx",
+        export_params=True,
+        input_names=["images"],
+        # output_names=["output1","ouput2","ouput3","ouput4","ouput5","ouput6"],
+        output_names=["output1"],
+        opset_version=16)
+
+
+        # dynamic_axes={
+        #     "images": {0: "batch"},
+        #     "output": {0: "batch"}
+        # }
+    
+    print("Done.!")
+    # model.eval()
+    # x1 = torch.randn(1,6,3,3)
+    # x2 =  torch.randn(1,6,3)
+    # x3 = torch.randn(1,6,3,3)
+    # x4 = torch.randn(1,6,3,3)
+    # x5 = torch.randn(1,6,3)
+    # x6 =[x1,x2,x3,x4,x5]
+    # x = torch.randn(6,3,256,704)
+    # x = model.img_backbone(x)
+    # x = model.img_neck(x)
+    # x = x.view(1, 6, 512, 16, 44)
+
+    # x = model.img_view_transformer([x]+x6)
+    # x = model.img_bev_encoder_backbone(x)
+    # x = model.img_bev_encoder_neck(x)#result x torch.Size([1, 256, 128, 128])
+    # x = model.pts_bbox_head([x])
+    # print("infer end:")
 
     if not distributed:
         model = MMDataParallel(model, device_ids=[0])

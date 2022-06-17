@@ -108,32 +108,32 @@ class LoadMultiViewImageFromFiles_BEVDet(object):
     def img_transform(self, img, post_rot, post_tran,
                       resize, resize_dims, crop,
                       flip, rotate):
-        # adjust image
-        img = self.img_transform_core(img, resize_dims, crop, flip, rotate)
+        # adjust image 先resize 再裁剪
+        img = self.img_transform_core(img, resize_dims, crop, flip, rotate)#result 704,256
 
         # post-homography transformation
         post_rot *= resize
         post_tran -= torch.Tensor(crop[:2])
-        if flip:
+        if flip:#false
             A = torch.Tensor([[-1, 0], [0, 1]])
             b = torch.Tensor([crop[2] - crop[0], 0])
             post_rot = A.matmul(post_rot)
             post_tran = A.matmul(post_tran) + b
-        A = self.get_rot(rotate / 180 * np.pi)
-        b = torch.Tensor([crop[2] - crop[0], crop[3] - crop[1]]) / 2
-        b = A.matmul(-b) + b
-        post_rot = A.matmul(post_rot)
-        post_tran = A.matmul(post_tran) + b
+        A = self.get_rot(rotate / 180 * np.pi)#[[1,0],[-0,1]]
+        b = torch.Tensor([crop[2] - crop[0], crop[3] - crop[1]]) / 2#tensor([352., 128.])
+        b = A.matmul(-b) + b#b[0,0]
+        post_rot = A.matmul(post_rot)# result [[0.48,0].[0,0.48]]
+        post_tran = A.matmul(post_tran) + b#result tensor([ -32., -176.])
 
         return img, post_rot, post_tran
 
     def img_transform_core(self, img, resize_dims, crop, flip, rotate):
         # adjust image
         img = img.resize(resize_dims)
-        img = img.crop(crop)
+        img = img.crop(crop)#(xmin,ymin,xmax,ymax)
         if flip:
             img = img.transpose(method=Image.FLIP_LEFT_RIGHT)
-        img = img.rotate(rotate)
+        img = img.rotate(rotate)#0
         return img
 
     def choose_cams(self):
@@ -145,7 +145,7 @@ class LoadMultiViewImageFromFiles_BEVDet(object):
         return cams
 
     def sample_augmentation(self, H , W, flip=None, scale=None):
-        fH, fW = self.data_config['input_size']
+        fH, fW = self.data_config['input_size']#256,704
         if self.is_train:
             resize = float(fW)/float(W)
             resize += np.random.uniform(*self.data_config['resize'])
@@ -158,13 +158,13 @@ class LoadMultiViewImageFromFiles_BEVDet(object):
             rotate = np.random.uniform(*self.data_config['rot'])
         else:
             resize = float(fW)/float(W)
-            resize += self.data_config.get('resize_test', 0.0)
+            resize += self.data_config.get('resize_test', 0.0)#0.44+0.04=0.48
             if scale is not None:
                 resize = scale
             resize_dims = (int(W * resize), int(H * resize))
             newW, newH = resize_dims
-            crop_h = int((1 - np.mean(self.data_config['crop_h'])) * newH) - fH
-            crop_w = int(max(0, newW - fW) / 2)
+            crop_h = int((1 - np.mean(self.data_config['crop_h'])) * newH) - fH#432-256=176
+            crop_w = int(max(0, newW - fW) / 2)#(768-704)/2=32
             crop = (crop_w, crop_h, crop_w + fW, crop_h + fH)
             flip = False if flip is None else flip
             rotate = 0
@@ -190,10 +190,13 @@ class LoadMultiViewImageFromFiles_BEVDet(object):
             tran = torch.Tensor(cam_data['sensor2lidar_translation'])
 
             # augmentation (resize, crop, horizontal flip, rotate)
+            #0.48 ,  (768,432),(32, 176, 736, 432),false,0 736-32=704,432-176=256
             resize, resize_dims, crop, flip, rotate = self.sample_augmentation(H=img.height,
                                                                                W=img.width,
                                                                                flip=flip,
-                                                                               scale=scale)
+                                                                           scale=scale)
+            # [704,256]   ,[[0.48,0].[0,0.48]]  ,tensor([ -32., -176.])    
+            # 该函数已经完成了对图片的裁剪+resize操作                                                                     
             img, post_rot2, post_tran2 = self.img_transform(img, post_rot, post_tran,
                                                             resize=resize,
                                                             resize_dims=resize_dims,
@@ -230,9 +233,9 @@ class LoadMultiViewImageFromFiles_BEVDet(object):
                                                                flip=flip,
                                                                rotate=rotate)
                         imgs.append(self.normalize_img(img_adjacent))
-            intrins.append(intrin)
-            rots.append(rot)
-            trans.append(tran)
+            intrins.append(intrin)#相机内参
+            rots.append(rot)#对lidar的旋转
+            trans.append(tran)#对lidar的平移[1 * 3]
             post_rots.append(post_rot)
             post_trans.append(post_tran)
 

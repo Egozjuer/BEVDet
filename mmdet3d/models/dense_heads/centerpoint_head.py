@@ -338,7 +338,7 @@ class CenterHead(BaseModule):
         """
         ret_dicts = []
 
-        x = self.shared_conv(x)
+        x = self.shared_conv(x)#会出问题 input:torch.Size([1, 256, 128, 128]) result:[1,64,128,128]
 
         for task in self.task_heads:
             ret_dicts.append(task(x))
@@ -355,7 +355,7 @@ class CenterHead(BaseModule):
         Returns:
             tuple(list[dict]): Output results for tasks.
         """
-        return multi_apply(self.forward_single, feats)
+        return multi_apply(self.forward_single, feats)#似乎是一个回调函数
 
     def _gather_feat(self, feat, ind, mask=None):
         """Gather feature map.

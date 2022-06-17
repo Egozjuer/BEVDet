@@ -75,9 +75,9 @@ class CenterPoint(MVXTwoStageDetector):
 
     def simple_test_pts(self, x, img_metas, rescale=False):
         """Test function of point cloud branch."""
-        outs = self.pts_bbox_head(x)
+        outs = self.pts_bbox_head(x)#六个列表，每个列表是一个字典，字典包含六个元素 'reg','height','dim','rot','vel','heatmap'
         bbox_list = self.pts_bbox_head.get_bboxes(
-            outs, img_metas, rescale=rescale)
+            outs, img_metas, rescale=rescale)#似乎就不带模型参数了
         bbox_results = [
             bbox3d2result(bboxes, scores, labels)
             for bboxes, scores, labels in bbox_list

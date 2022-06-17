@@ -13,7 +13,7 @@ from mmdet3d.core import (Box3DMode, CameraInstance3DBoxes,
                           show_multi_modality_result, show_result,
                           show_seg_result)
 from mmdet3d.core.bbox import get_box_type
-from mmdet3d.datasets.pipelines import Compose
+from mmdet3d.datasets.pipelines import Compose#这里先进入dataset的__init__，再进入pipeline的__init__
 from mmdet3d.models import build_model
 
 
